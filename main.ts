@@ -12,11 +12,33 @@
 // Node 22+, standard library only. No network, no wall clock, no files
 // outside the repository, no environment secrets.
 
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const BOT_DIR = process.env.MAKEFUN_BOT_DIR ?? '/bot';
 const OUTPUT_DIR = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+
+// Validate POST.json before copying: it must be valid JSON whose `url`
+// names the X post this entry promotes. A bad file fails fast with a
+// clear error instead of silently shipping an unusable entry.
+const postPath = join(BOT_DIR, 'POST.json');
+let post: unknown;
+try {
+  post = JSON.parse(readFileSync(postPath, 'utf8'));
+} catch (err) {
+  console.error(`POST.json in ${BOT_DIR} is not valid JSON: ${(err as Error).message}`);
+  process.exit(1);
+}
+const url = (post as { url?: unknown } | null)?.url;
+if (
+  typeof url !== 'string' ||
+  (!url.startsWith('https://x.com/') && !url.startsWith('https://twitter.com/'))
+) {
+  console.error(
+    `POST.json in ${BOT_DIR} has no valid X status URL: expected "url" to start with https://x.com/ or https://twitter.com/, got ${JSON.stringify(url)}`,
+  );
+  process.exit(1);
+}
 
 mkdirSync(OUTPUT_DIR, { recursive: true });
 try {
